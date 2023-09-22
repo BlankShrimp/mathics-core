@@ -79,7 +79,6 @@ from mathics.core.systemsymbols import (
     SymbolSimplify,
     SymbolUndefined,
 )
-from mathics.eval.calculus import solve_sympy
 from mathics.eval.makeboxes import format_element
 from mathics.eval.nevaluator import eval_N
 from mathics.eval.numbers.calculus.integrators import (
@@ -94,6 +93,7 @@ from mathics.eval.numbers.calculus.series import (
     series_plus_series,
     series_times_series,
 )
+from mathics.eval.numbers.calculus.solvers import solve_sympy
 
 # These should be used in lower-level formatting
 SymbolDifferentialD = Symbol("System`DifferentialD")
@@ -334,9 +334,9 @@ class D(SympyFunction):
                         Expression(
                             SymbolDerivative,
                             *(
-                                [Integer0] * (index) +
-                                [Integer1] +
-                                [Integer0] * (len(f.elements) - index - 1)
+                                [Integer0] * (index)
+                                + [Integer1]
+                                + [Integer0] * (len(f.elements) - index - 1)
                             ),
                         ),
                         f.head,
@@ -668,8 +668,8 @@ class _BaseFinder(Builtin):
 
         # Determine the "jacobian"s
         if (
-            method in ("Newton", "Automatic") and
-            options["System`Jacobian"] is SymbolAutomatic
+            method in ("Newton", "Automatic")
+            and options["System`Jacobian"] is SymbolAutomatic
         ):
 
             def diff(evaluation):
@@ -1327,16 +1327,16 @@ class NIntegrate(Builtin):
     messages = {
         "bdmtd": "The Method option should be a built-in method name.",
         "inumr": (
-            "The integrand `1` has evaluated to non-numerical " +
-            "values for all sampling points in the region " +
-            "with boundaries `2`"
+            "The integrand `1` has evaluated to non-numerical "
+            + "values for all sampling points in the region "
+            + "with boundaries `2`"
         ),
         "nlim": "`1` = `2` is not a valid limit of integration.",
         "ilim": "Invalid integration variable or limit(s) in `1`.",
         "mtdfail": (
-            "The specified method failed to return a " +
-            "number. Falling back into the internal " +
-            "evaluator."
+            "The specified method failed to return a "
+            + "number. Falling back into the internal "
+            + "evaluator."
         ),
         "cmpint": ("Integration over a complex domain is not " + "implemented yet"),
     }
@@ -1379,10 +1379,10 @@ class NIntegrate(Builtin):
 
     messages.update(
         {
-            "bdmtd": "The Method option should be a " +
-            "built-in method name in {`" +
-            "`, `".join(list(methods)) +
-            "`}. Using `Automatic`"
+            "bdmtd": "The Method option should be a "
+            + "built-in method name in {`"
+            + "`, `".join(list(methods))
+            + "`}. Using `Automatic`"
         }
     )
 
@@ -1402,7 +1402,7 @@ class NIntegrate(Builtin):
         elif isinstance(method, Symbol):
             method = method.get_name()
             # strip context
-            method = method[method.rindex("`") + 1:]
+            method = method[method.rindex("`") + 1 :]
         else:
             evaluation.message("NIntegrate", "bdmtd", method)
             return
@@ -2217,9 +2217,7 @@ class Solve(Builtin):
         "fulldim": "The solution set contains a full-dimensional component; use Reduce for complete solution information.",
     }
 
-    rules = {
-        "Solve[eqs_, vars_]": "Solve[eqs, vars, Complexes]"
-    }
+    rules = {"Solve[eqs_, vars_]": "Solve[eqs, vars, Complexes]"}
     summary_text = "find generic solutions for variables"
 
     def eval(self, eqs, vars, domain, evaluation: Evaluation):
@@ -2233,9 +2231,9 @@ class Solve(Builtin):
             variables = [variables]
         for var in variables:
             if (
-                (isinstance(var, Atom) and not isinstance(var, Symbol)) or
-                head_name in ("System`Plus", "System`Times", "System`Power") or  # noqa
-                A_CONSTANT & var.get_attributes(evaluation.definitions)
+                (isinstance(var, Atom) and not isinstance(var, Symbol))
+                or head_name in ("System`Plus", "System`Times", "System`Power")
+                or A_CONSTANT & var.get_attributes(evaluation.definitions)  # noqa
             ):
 
                 evaluation.message("Solve", "ivar", vars)
@@ -2248,7 +2246,7 @@ class Solve(Builtin):
         variable_tuples = list(zip(variables, sympy_variables))
 
         def solve_recur(expression: Expression):
-            '''solve And, Or and List within the scope of sympy,
+            """solve And, Or and List within the scope of sympy,
             but including the translation from Mathics to sympy
 
             returns:
@@ -2257,16 +2255,16 @@ class Solve(Builtin):
 
             note:
                 for And and List, should always return either (solutions, None) or ([], conditions)
-                for Or, all combinations are possible. if Or is root, this should be handled outside'''
+                for Or, all combinations are possible. if Or is root, this should be handled outside"""
             head = expression.get_head_name()
-            if head in ('System`And', 'System`List'):
+            if head in ("System`And", "System`List"):
                 solutions = []
                 equations: list[Expression] = []
                 inequations = []
                 for child in expression.elements:
                     if child.has_form("Equal", 2):
                         equations.append(child)
-                    elif child.get_head_name() in ('System`And', 'System`Or'):
+                    elif child.get_head_name() in ("System`And", "System`Or"):
                         sub_solution, sub_condition = solve_recur(child)
                         solutions.extend(sub_solution)
                         if sub_condition is not None:
@@ -2278,13 +2276,18 @@ class Solve(Builtin):
                 result = [sol for sol in solutions if conditions.subs(sol)]
                 return result, None if solutions else conditions
             else:  # assume should be System`Or
-                assert head == 'System`Or'
+                assert head == "System`Or"
                 solutions = []
                 conditions = []
                 for child in expression.elements:
                     if child.has_form("Equal", 2):
-                        solutions.extend(solve_sympy(evaluation, child, variables, domain))
-                    elif child.get_head_name() in ('System`And', 'System`Or'):  # I don't believe List would be in here
+                        solutions.extend(
+                            solve_sympy(evaluation, child, variables, domain)
+                        )
+                    elif child.get_head_name() in (
+                        "System`And",
+                        "System`Or",
+                    ):  # I don't believe List would be in here
                         sub_solution, sub_condition = solve_recur(child)
                         solutions.extend(sub_solution)
                         if sub_condition is not None:
